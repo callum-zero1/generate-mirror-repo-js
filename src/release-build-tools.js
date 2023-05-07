@@ -132,7 +132,7 @@ function updateComposerDepsFromMagentoToMageOs(composerJson) {
 }
 
 async function prepPackageForRelease({label, dir}, repoUrl, ref, releaseVersion, replaceVersionMap, workingCopyPath) {
-  console.log(`Preparing ${label}`);
+  console.log(`\nPreparing ${label}`);
 
   const composerJson = JSON.parse(await readComposerJson(repoUrl, dir, ref))
   composerJson.version = releaseVersion
@@ -146,6 +146,9 @@ async function prepPackageForRelease({label, dir}, repoUrl, ref, releaseVersion,
   // write composerJson to file in repo
   const file = path.join(workingCopyPath, dir, 'composer.json');
   await fs.writeFile(file, JSON.stringify(composerJson, null, 4), 'utf8')
+
+  console.log(`Adding composer.json to Git commit`);
+  await repo.add(repoUrl, path.join(dir, 'composer.json'));
 }
 
 
@@ -157,14 +160,14 @@ module.exports = {
     return getInstalledPackageMap(dir)
   },
   async prepRelease(releaseVersion, instruction, options) {
+    console.log(`\nPrepping release of: ${instruction.repoUrl}`)
     const {replaceVersionMap} = options
     const {ref, repoUrl} = instruction
 
     const workingCopyPath = await repo.checkout(repoUrl, ref)
 
-    // todo: check out work-in-progress branch (temporary, can be deleted again after commit and tag)
-    // this needs more work:
-    await repo.createBranch(repoUrl, `work-in-progress-release-prep-${releaseVersion}`);
+    const wipBranch = `work-in-progress-release-prep-${releaseVersion}`
+    await repo.createBranch(repoUrl, wipBranch);
 
     for (const packageDirInstruction of (instruction.packageDirs || [])) {
       const childPackageDirs = await fs.readdir(path.join(workingCopyPath, packageDirInstruction.dir));
@@ -189,18 +192,18 @@ module.exports = {
         }
 
         childPackageDir = path.join(packageDirInstruction.dir, childPackageDir);
-        const composerJson = JSON.parse(await readComposerJson(repoUrl, childPackageDir, ref));
+        const composerJson = JSON.parse(await readComposerJson(repoUrl, childPackageDir, wipBranch));
 
         const instruction = {
           'label': `${composerJson.name} (part of ${packageDirInstruction.label})`,
           'dir': childPackageDir
         }
-        await prepPackageForRelease(instruction, repoUrl, ref, releaseVersion, replaceVersionMap, workingCopyPath);
+        await prepPackageForRelease(instruction, repoUrl, wipBranch, releaseVersion, replaceVersionMap, workingCopyPath);
       }
     }
 
     for (const individualInstruction of (instruction.packageIndividual || [])) {
-      await prepPackageForRelease(individualInstruction, repoUrl, ref, releaseVersion, replaceVersionMap, workingCopyPath);
+      await prepPackageForRelease(individualInstruction, repoUrl, wipBranch, releaseVersion, replaceVersionMap, workingCopyPath);
     }
 
     for (const packageDirInstruction of (instruction.packageMetaFromDirs || [])) {
@@ -215,14 +218,25 @@ module.exports = {
       // todo: build map of every module that the mage-os/product-community-edition depends on to the releaseVersion
       // todo: alternatively, maybe introduce `*` as a wildcard-key, that matches all packages?
       const dependencyVersions = {}
-      const built = createMagentoCommunityEditionMetapackage(repoUrl, ref, {
+
+      const built = await createMagentoCommunityEditionMetapackage(repoUrl, wipBranch, {
         release: releaseVersion,
         vendor: 'mage-os',
         dependencyVersions
       })
     }
 
-    // todo: commit all changes
-    // todo: tag release version
+    console.log(`Committing`);
+    await repo.commit(repoUrl, `Mage-OS Release ${releaseVersion}`);
+  
+    console.log(`Tagging at version: ${releaseVersion}`);
+    await repo.createTagForRef(repoUrl, wipBranch, releaseVersion);
+
+    console.log(`Deleting branch: ${wipBranch}`);
+    await repo.deleteBranch(repoUrl, wipBranch, ref, true);
+  
+    console.log(`Pushing`);
+    // todo: push tag
+    // need to setup forks of my own to test this.
   }
 }

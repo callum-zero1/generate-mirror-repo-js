@@ -48,6 +48,20 @@ function validateBranchIsSecure(branch) {
   return branch;
 }
 
+function validateCommitMessageIsSecure(commitMessage) {
+  if (commitMessage.substring(0, 1) === '-' || commitMessage.includes('`') || commitMessage.includes('$')) {
+    throw new Error(`Rejecting the commit message "${commitMessage}" as potentially insecure`)
+  }
+  return commitMessage;
+}
+
+async function setCredentials(url, username = 'Mage-OS Mirror Repo', email = 'repo@mage-os.org') {
+  const dir = fullRepoPath(url);
+
+  await exec(`git config user.name "${username}"`, {cwd: dir});
+  await exec(`git config user.email "${email}"`, {cwd: dir});
+}
+
 async function exec(cmd, options) {
   return new Promise((resolve, reject) => {
     const bufferBytes = 4 * 1024 * 1024; // 4M
@@ -135,6 +149,40 @@ async function createBranch(url, branch) {
   return dir;
 }
 
+async function deleteBranch(url, branchToDelete, force) {
+  const dir = fullRepoPath(url);
+  if (!(await exec(`git branch -l ${branchToDelete}`, {cwd: dir})).includes(branchToDelete)) {
+    console.log(`Cannot delete branch ${branchToDelete}, it doesn't exist.`);
+    return false;
+  }
+
+  if (force === true) {
+    return await exec(`git branch -D ${branchToDelete}`, {cwd: dir});
+  }
+
+  return await exec(`git branch -d ${branchToDelete}`, {cwd: dir});
+}
+
+async function add(url, filepath) {
+  const dir = fullRepoPath(url);
+  return await exec(`git add ${filepath}`, {cwd: dir});
+}
+
+async function commit(url, message) {
+  const dir = fullRepoPath(url);
+  await setCredentials(url);
+  return await exec(`git commit -m "${message}"`, {cwd: dir});
+}
+
+async function isDirTopLevel(filepath) {
+  const topLevel = await exec(`git rev-parse --show-toplevel`, {cwd: filepath});
+  if (topLevel.trim() === filepath) {
+    return true;
+  }
+
+  return false;
+}
+
 module.exports = {
   async listFolders(url, pathInRepo, ref) {
     validateRefIsSecure(ref);
@@ -182,6 +230,13 @@ module.exports = {
     validateBranchIsSecure(branch);
     return createBranch(url, branch);
   },
+  async deleteBranch(url, branchToDelete, branchToSwitchTo, force) {
+    validateBranchIsSecure(branchToDelete);
+    validateBranchIsSecure(branchToSwitchTo);
+
+    await createBranch(url, branchToSwitchTo);
+    return deleteBranch(url, branchToDelete, force);
+  },
   async createTagForRef(url, ref, tag, details) {
     validateRefIsSecure(ref);
     validateRefIsSecure(tag);
@@ -189,8 +244,7 @@ module.exports = {
     const msg = await exec(`git tag -n ${tag}`, {cwd: dir});
     if (msg.trim().length === 0) {
       // Create tag if it doesn't exist
-      await exec(`git config user.email "repo@mage-os.org"`, {cwd: dir});
-      await exec(`git config user.name "Mage-OS Mirror Repo"`, {cwd: dir});
+      await setCredentials(url);
       await exec(`git tag -a ${tag} ${ref} -m "Mage-OS Extra Ref"`, {cwd: dir});
     } else if (! msg.includes('Mage-OS Extra Ref')) {
       // Throw if the tag was not created by package generator
@@ -201,6 +255,16 @@ module.exports = {
     validateRefIsSecure(ref);
     const dir = await initRepo(url, ref);
     await exec(`git pull --ff-only --quiet origin ${ref}`, {cwd: dir});
+  },
+  async add(url, filepath) {
+    return add(url, filepath);
+  },
+  async commit(url, message) {
+    validateCommitMessageIsSecure(message);
+    return commit(url, message);
+  },
+  async isDirTopLevel(filepath) {
+    return isDirTopLevel(filepath);
   },
   clearCache() {
     // noop

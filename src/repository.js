@@ -36,6 +36,18 @@ module.exports = {
   async createBranch(url, branch) {
     return git.createBranch(url, branch)
   },
+  async deleteBranch(url, branchToDelete, branchToSwitchTo, force) {
+    return git.deleteBranch(url, branchToDelete, branchToSwitchTo, force)
+  },
+  async add(url, filepath) {
+    return git.add(url, filepath);
+  },
+  async commit(url, message) {
+    return git.commit(url, message);
+  },
+  async isDirTopLevel(filepath) {
+    return git.isDirTopLevel(filepath);
+  },
   clearCache() {
     git.clearCache()
   },
