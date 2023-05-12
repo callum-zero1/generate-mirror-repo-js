@@ -258,10 +258,10 @@ module.exports = {
     await repo.commit(repoUrl, `Mage-OS Release ${releaseVersion}`);
   
     console.log(`Tagging at version: ${releaseVersion}`);
-    await repo.createTagForRef(repoUrl, wipBranch, releaseVersion);
+    await repo.createTagForRef(repoUrl, workBranch, releaseVersion);
 
-    console.log(`Deleting branch: ${wipBranch}`);
-    await repo.deleteBranch(repoUrl, wipBranch, ref, true);
+    console.log(`Deleting branch: ${workBranch}`);
+    await repo.deleteBranch(repoUrl, workBranch, ref, true);
   
     console.log(`Pushing`);
     // todo: push tag
