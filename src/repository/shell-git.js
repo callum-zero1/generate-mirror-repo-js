@@ -201,6 +201,8 @@ module.exports = {
     validateRefIsSecure(ref);
     const dir = await initRepo(url, ref);
     await exec(`git pull --ff-only --quiet origin ${ref}`, {cwd: dir});
+
+    return dir;
   },
   clearCache() {
     // noop
