@@ -173,7 +173,6 @@ async function prepPackageForRelease({label, dir}, repoUrl, ref, releaseVersion,
   await fs.writeFile(file, JSON.stringify(composerConfig, null, 2), 'utf8')
 }
 
-
 async function buildMageOsProductCommunityEditionMetapackage(releaseVersion, instruction, replaceVersionMap) {
   const {ref, repoUrl} = instruction
 
@@ -185,6 +184,26 @@ async function buildMageOsProductCommunityEditionMetapackage(releaseVersion, ins
     dependencyVersions: {'*': releaseVersion},
     transform: {
       'mage-os/product-community-edition': [
+        (composerConfig) => {
+          updateComposerConfigFromMagentoToMageOs(composerConfig, releaseVersion, replaceVersionMap)
+          return composerConfig
+        }
+      ]
+    }
+  })
+}
+
+async function buildMageOsProjectCommunityEditionMetapackage(releaseVersion, instruction, replaceVersionMap) {
+  const {ref, repoUrl} = instruction
+
+  console.log('Packaging Mage-OS Community Edition Project Metapackage');
+
+  await createMagentoCommunityEditionProject(repoUrl, ref, {
+    release: releaseVersion,
+    vendor: 'mage-os',
+    dependencyVersions: {'*': releaseVersion},
+    transform: {
+      'mage-os/project-community-edition': [
         (composerConfig) => {
           updateComposerConfigFromMagentoToMageOs(composerConfig, releaseVersion, replaceVersionMap)
           return composerConfig
@@ -314,9 +333,8 @@ module.exports = {
 
     if (instruction.magentoCommunityEditionProject) {
       console.log('Packaging Mage-OS Community Edition Project');
-      // TODO: package mage-os/project-community-edition metapackage with min stability: stable
-      // TODO: remember to add package to packages object
-      //Object.assign(packages, built);
+      const built = await buildMageOsProjectCommunityEditionMetapackage(mageosRelease, instruction, {replaceVersionMap: upstreamVersionMap})
+      Object.assign(packages, built)
     }
 
     return packages

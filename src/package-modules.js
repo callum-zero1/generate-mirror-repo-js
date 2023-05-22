@@ -463,22 +463,21 @@ async function determineMagentoCommunityEditionProject(url, ref, release) {
  * @returns {Promise<{}>}
  */
 async function createMagentoCommunityEditionProject(url, ref, options) {
-  const defaults = {release: undefined, dependencyVersions: {}, minimumStability: 'stable'};
-  const {release, dependencyVersions, minimumStability, transform} = Object.assign(defaults, (options || {}))
-  const name = 'magento/project-community-edition';
-  const version = release || dependencyVersions[name] || ref;
-  const {packageFilepath, files} = await createComposerJsonOnlyPackage(url, ref, name, async (refComposerConfig) => {
+  const {release, dependencyVersions, minimumStability, transform, vendor} = Object.assign({release: undefined, dependencyVersions: {}, minimumStability: 'stable', vendor: 'magento'}, (options || {}))
+  const packageName = `${vendor}/project-community-edition`;
+  const version = release || dependencyVersions[packageName] || ref;
+  const {packageFilepath, files} = await createComposerJsonOnlyPackage(url, ref, packageName, async (refComposerConfig) => {
 
-    const additionalDependencies = await getAdditionalDependencies(name, ref);
+    const additionalDependencies = await getAdditionalDependencies(packageName, ref);
 
     const composerConfig = Object.assign(refComposerConfig, {
-      name: name,
+      name: packageName,
       description: 'eCommerce Platform for Growth (Community Edition)',
       extra: {'magento-force': 'override'},
       version: version,
       repositories: [{type: 'composer', url: mageosPackageRepoUrl}],
       'minimum-stability': minimumStability,
-      require: Object.assign({'magento/product-community-edition': version}, additionalDependencies)
+      require: Object.assign({[`${vendor}/product-community-edition`]: version}, additionalDependencies)
     });
 
     for (const k of ['replace', 'suggest']) {
@@ -486,7 +485,7 @@ async function createMagentoCommunityEditionProject(url, ref, options) {
     }
     setDependencyVersions(composerConfig, dependencyVersions);
 
-    return (transform && transform[name] || []).reduce((config, transformFn) => transformFn(config), composerConfig)
+    return (transform && transform[packageName] || []).reduce((config, transformFn) => transformFn(config), composerConfig)
   }, version);
 
   // Special case - in these releases the base package also contained a .gitignore file in addition to the composer.json file.
@@ -503,7 +502,7 @@ async function createMagentoCommunityEditionProject(url, ref, options) {
 
   await writePackage(packageFilepath, files)
 
-  return {[name]: version}
+  return {[packageName]: version}
 }
 
 /**
